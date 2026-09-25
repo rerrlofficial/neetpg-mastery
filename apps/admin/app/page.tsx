@@ -1,10 +1,13 @@
-
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../lib/supabase";
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("Dashboard");
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const menuItems = [
     "Dashboard",
@@ -14,6 +17,15 @@ export default function AdminDashboard() {
     "Analytics",
     "Settings"
   ];
+
+  async function handleLogout() {
+    setLoggingOut(true);
+
+    await supabase.auth.signOut();
+
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <main
@@ -64,13 +76,39 @@ export default function AdminDashboard() {
 
           <div
             style={{
-              background: "#ffffff",
-              borderRadius: "14px",
-              padding: "12px 16px",
-              boxShadow: "0 4px 18px rgba(15, 23, 42, 0.06)"
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap"
             }}
           >
-            Administrator
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "14px",
+                padding: "12px 16px",
+                boxShadow: "0 4px 18px rgba(15, 23, 42, 0.06)"
+              }}
+            >
+              Administrator
+            </div>
+
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                border: "1px solid #fecaca",
+                borderRadius: "10px",
+                padding: "12px 16px",
+                cursor: loggingOut ? "not-allowed" : "pointer",
+                background: "#ffffff",
+                color: "#dc2626",
+                fontWeight: 700,
+                opacity: loggingOut ? 0.6 : 1
+              }}
+            >
+              {loggingOut ? "Signing out..." : "Sign Out"}
+            </button>
           </div>
         </header>
 
@@ -183,15 +221,15 @@ export default function AdminDashboard() {
             }}
           >
             <a
-  href="/upload"
-  style={{
-    ...actionButtonStyle,
-    display: "inline-block",
-    textDecoration: "none",
-  }}
->
-  Upload Excel Questions
-</a>
+              href="/upload"
+              style={{
+                ...actionButtonStyle,
+                display: "inline-block",
+                textDecoration: "none"
+              }}
+            >
+              Upload Excel Questions
+            </a>
 
             <button
               onClick={() => setActiveTab("Question Bank")}
