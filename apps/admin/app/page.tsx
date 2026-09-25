@@ -182,12 +182,16 @@ export default function AdminDashboard() {
               gap: "12px"
             }}
           >
-            <button
-              onClick={() => setActiveTab("Upload Questions")}
-              style={actionButtonStyle}
-            >
-              Upload Excel Questions
-            </button>
+            <a
+  href="/upload"
+  style={{
+    ...actionButtonStyle,
+    display: "inline-block",
+    textDecoration: "none",
+  }}
+>
+  Upload Excel Questions
+</a>
 
             <button
               onClick={() => setActiveTab("Question Bank")}
