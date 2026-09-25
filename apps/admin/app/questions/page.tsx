@@ -20,6 +20,21 @@ type Question = {
   created_at: string;
 };
 
+type EditForm = {
+  question: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_answer: "A" | "B" | "C" | "D";
+  explanation: string;
+  subject: string;
+  unit: string;
+  subunit: string;
+  topic: string;
+  image_url: string;
+};
+
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +42,12 @@ export default function QuestionBankPage() {
 
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("All");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function loadQuestions() {
     setLoading(true);
@@ -98,6 +119,126 @@ export default function QuestionBankPage() {
     });
   }, [questions, search, subjectFilter]);
 
+  function startEditing(item: Question) {
+    setEditingId(item.id);
+
+    setEditForm({
+      question: item.question,
+      option_a: item.option_a,
+      option_b: item.option_b,
+      option_c: item.option_c,
+      option_d: item.option_d,
+      correct_answer: item.correct_answer,
+      explanation: item.explanation || "",
+      subject: item.subject || "",
+      unit: item.unit || "",
+      subunit: item.subunit || "",
+      topic: item.topic || "",
+      image_url: item.image_url || "",
+    });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editForm) {
+      return;
+    }
+
+    if (
+      !editForm.question.trim() ||
+      !editForm.option_a.trim() ||
+      !editForm.option_b.trim() ||
+      !editForm.option_c.trim() ||
+      !editForm.option_d.trim()
+    ) {
+      alert("Question and all four options are required.");
+      return;
+    }
+
+    setSaving(true);
+
+    const { error: updateError } = await supabase
+      .from("questions")
+      .update({
+        question: editForm.question.trim(),
+        option_a: editForm.option_a.trim(),
+        option_b: editForm.option_b.trim(),
+        option_c: editForm.option_c.trim(),
+        option_d: editForm.option_d.trim(),
+        correct_answer: editForm.correct_answer,
+        explanation: editForm.explanation.trim() || null,
+        subject: editForm.subject.trim() || null,
+        unit: editForm.unit.trim() || null,
+        subunit: editForm.subunit.trim() || null,
+        topic: editForm.topic.trim() || null,
+        image_url: editForm.image_url.trim() || null,
+      })
+      .eq("id", editingId);
+
+    setSaving(false);
+
+    if (updateError) {
+      alert(`Update failed: ${updateError.message}`);
+      return;
+    }
+
+    cancelEditing();
+    await loadQuestions();
+  }
+
+  async function deleteQuestion(id: string) {
+    const confirmed = window.confirm(
+      "Are you sure you want to permanently delete this question?\n\nThis action cannot be undone."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(id);
+
+    const { error: deleteError } = await supabase
+      .from("questions")
+      .delete()
+      .eq("id", id);
+
+    setDeletingId(null);
+
+    if (deleteError) {
+      alert(`Delete failed: ${deleteError.message}`);
+      return;
+    }
+
+    if (editingId === id) {
+      cancelEditing();
+    }
+
+    await loadQuestions();
+  }
+
+  function updateEditField(
+    field: keyof EditForm,
+    value: string
+  ) {
+    if (!editForm) {
+      return;
+    }
+
+    setEditForm({
+      ...editForm,
+      [field]: value,
+    } as EditForm);
+  }
+
   return (
     <main style={styles.page}>
       <div style={styles.container}>
@@ -113,15 +254,12 @@ export default function QuestionBankPage() {
             </h1>
 
             <p style={styles.subtitle}>
-              Manage and review your uploaded NEET-PG questions.
+              Manage, edit and review your NEET-PG questions.
             </p>
           </div>
 
           <div style={styles.headerActions}>
-            <a
-              href="/"
-              style={styles.secondaryButton}
-            >
+            <a href="/" style={styles.secondaryButton}>
               Dashboard
             </a>
 
@@ -134,8 +272,257 @@ export default function QuestionBankPage() {
           </div>
         </div>
 
-        <section style={styles.statsCard}>
-          <div>
+        {editingId && editForm && (
+          <section style={styles.editCard}>
+            <div style={styles.editHeader}>
+              <div>
+                <h2 style={styles.editTitle}>
+                  Edit Question
+                </h2>
+
+                <p style={styles.editSubtitle}>
+                  Modify the question and save your changes.
+                </p>
+              </div>
+
+              <button
+                onClick={cancelEditing}
+                style={styles.cancelButton}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={styles.editGrid}>
+
+              <div style={styles.fullField}>
+                <label style={styles.label}>
+                  Question *
+                </label>
+
+                <textarea
+                  value={editForm.question}
+                  onChange={(e) =>
+                    updateEditField(
+                      "question",
+                      e.target.value
+                    )
+                  }
+                  style={styles.textarea}
+                  rows={4}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Option A *
+                </label>
+
+                <input
+                  value={editForm.option_a}
+                  onChange={(e) =>
+                    updateEditField(
+                      "option_a",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Option B *
+                </label>
+
+                <input
+                  value={editForm.option_b}
+                  onChange={(e) =>
+                    updateEditField(
+                      "option_b",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Option C *
+                </label>
+
+                <input
+                  value={editForm.option_c}
+                  onChange={(e) =>
+                    updateEditField(
+                      "option_c",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Option D *
+                </label>
+
+                <input
+                  value={editForm.option_d}
+                  onChange={(e) =>
+                    updateEditField(
+                      "option_d",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Correct Answer *
+                </label>
+
+                <select
+                  value={editForm.correct_answer}
+                  onChange={(e) =>
+                    updateEditField(
+                      "correct_answer",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                >
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </select>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Subject
+                </label>
+
+                <input
+                  value={editForm.subject}
+                  onChange={(e) =>
+                    updateEditField(
+                      "subject",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Unit
+                </label>
+
+                <input
+                  value={editForm.unit}
+                  onChange={(e) =>
+                    updateEditField(
+                      "unit",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Subunit
+                </label>
+
+                <input
+                  value={editForm.subunit}
+                  onChange={(e) =>
+                    updateEditField(
+                      "subunit",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Topic
+                </label>
+
+                <input
+                  value={editForm.topic}
+                  onChange={(e) =>
+                    updateEditField(
+                      "topic",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.fullField}>
+                <label style={styles.label}>
+                  Explanation
+                </label>
+
+                <textarea
+                  value={editForm.explanation}
+                  onChange={(e) =>
+                    updateEditField(
+                      "explanation",
+                      e.target.value
+                    )
+                  }
+                  style={styles.textarea}
+                  rows={5}
+                />
+              </div>
+
+              <div style={styles.fullField}>
+                <label style={styles.label}>
+                  Image URL
+                </label>
+
+                <input
+                  value={editForm.image_url}
+                  onChange={(e) =>
+                    updateEditField(
+                      "image_url",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                  placeholder="https://..."
+                />
+              </div>
+
+            </div>
+
+            <button
+              onClick={saveEdit}
+              disabled={saving}
+              style={styles.saveButton}
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </section>
+        )}
+
+        <section style={styles.statsGrid}>
+
+          <div style={styles.statCard}>
             <div style={styles.statLabel}>
               Total Questions
             </div>
@@ -145,7 +532,7 @@ export default function QuestionBankPage() {
             </div>
           </div>
 
-          <div>
+          <div style={styles.statCard}>
             <div style={styles.statLabel}>
               Showing
             </div>
@@ -155,7 +542,7 @@ export default function QuestionBankPage() {
             </div>
           </div>
 
-          <div>
+          <div style={styles.statCard}>
             <div style={styles.statLabel}>
               Subjects
             </div>
@@ -164,6 +551,7 @@ export default function QuestionBankPage() {
               {Math.max(subjects.length - 1, 0)}
             </div>
           </div>
+
         </section>
 
         <section style={styles.filterCard}>
@@ -177,8 +565,8 @@ export default function QuestionBankPage() {
               <input
                 type="text"
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
+                onChange={(e) =>
+                  setSearch(e.target.value)
                 }
                 placeholder="Search question, topic, explanation..."
                 style={styles.input}
@@ -192,8 +580,8 @@ export default function QuestionBankPage() {
 
               <select
                 value={subjectFilter}
-                onChange={(event) =>
-                  setSubjectFilter(event.target.value)
+                onChange={(e) =>
+                  setSubjectFilter(e.target.value)
                 }
                 style={styles.input}
               >
@@ -371,6 +759,33 @@ export default function QuestionBankPage() {
                       )}
                     </div>
 
+                    <div style={styles.managementBar}>
+
+                      <button
+                        onClick={() =>
+                          startEditing(item)
+                        }
+                        style={styles.editButton}
+                      >
+                        ✏️ Edit
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          deleteQuestion(item.id)
+                        }
+                        disabled={
+                          deletingId === item.id
+                        }
+                        style={styles.deleteButton}
+                      >
+                        {deletingId === item.id
+                          ? "Deleting..."
+                          : "🗑️ Delete"}
+                      </button>
+
+                    </div>
+
                   </article>
                 )
               )}
@@ -451,12 +866,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
   },
 
-  statsCard: {
+  statsGrid: {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit, minmax(180px, 1fr))",
     gap: "16px",
     marginBottom: "20px",
+  },
+
+  statCard: {
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: "16px",
+    padding: "18px",
   },
 
   statLabel: {
@@ -486,6 +908,46 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "16px",
   },
 
+  editCard: {
+    background: "#ffffff",
+    border: "2px solid #2563eb",
+    borderRadius: "16px",
+    padding: "22px",
+    marginBottom: "24px",
+  },
+
+  editHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "15px",
+    marginBottom: "20px",
+  },
+
+  editTitle: {
+    margin: 0,
+    fontSize: "22px",
+  },
+
+  editSubtitle: {
+    margin: "5px 0 0",
+    color: "#64748b",
+  },
+
+  editGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "16px",
+  },
+
+  fullField: {
+    gridColumn: "1 / -1",
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+  },
+
   field: {
     display: "flex",
     flexDirection: "column",
@@ -506,6 +968,40 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     color: "#172033",
     fontSize: "14px",
+  },
+
+  textarea: {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "10px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#172033",
+    fontSize: "14px",
+    resize: "vertical",
+    fontFamily: "inherit",
+    lineHeight: 1.5,
+  },
+
+  saveButton: {
+    marginTop: "20px",
+    padding: "12px 18px",
+    border: "none",
+    borderRadius: "10px",
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  cancelButton: {
+    padding: "10px 14px",
+    borderRadius: "9px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontWeight: 700,
+    cursor: "pointer",
   },
 
   questionList: {
@@ -612,6 +1108,34 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: "1px solid #f1f5f9",
     color: "#64748b",
     fontSize: "12px",
+  },
+
+  managementBar: {
+    display: "flex",
+    gap: "10px",
+    marginTop: "18px",
+    paddingTop: "15px",
+    borderTop: "1px solid #e2e8f0",
+  },
+
+  editButton: {
+    padding: "10px 15px",
+    border: "1px solid #bfdbfe",
+    borderRadius: "9px",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  deleteButton: {
+    padding: "10px 15px",
+    border: "1px solid #fecaca",
+    borderRadius: "9px",
+    background: "#fef2f2",
+    color: "#dc2626",
+    fontWeight: 800,
+    cursor: "pointer",
   },
 
   messageCard: {
