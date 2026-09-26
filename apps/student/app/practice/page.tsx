@@ -35,6 +35,7 @@ export default function PracticePage() {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [answered, setAnswered] = useState(false);
 
@@ -108,13 +109,25 @@ export default function PracticePage() {
 
     setQuestions(data as Question[]);
 
+    /*
+     * Your attempts table uses:
+     * total_questions
+     * answered_questions
+     * correct_answers
+     * score_percent
+     *
+     * There is NO "score" column.
+     */
+
     const { data: attemptData, error: attemptError } =
       await supabase
         .from("attempts")
         .insert({
           user_id: user.id,
           total_questions: data.length,
-          score: 0,
+          answered_questions: 0,
+          correct_answers: 0,
+          score_percent: 0,
         })
         .select("id")
         .single();
@@ -123,6 +136,7 @@ export default function PracticePage() {
       setErrorMessage(
         `Questions loaded, but the practice session could not be created: ${attemptError.message}`
       );
+
       setLoading(false);
       return;
     }
@@ -138,6 +152,7 @@ export default function PracticePage() {
     if (option === "A") return question.option_a;
     if (option === "B") return question.option_b;
     if (option === "C") return question.option_c;
+
     return question.option_d;
   }
 
@@ -170,13 +185,33 @@ export default function PracticePage() {
     const isCorrect =
       answer === normalizedCorrect;
 
+    const nextScore =
+      score + (isCorrect ? 1 : 0);
+
+    const nextAnsweredCount =
+      answeredCount + 1;
+
+    const scorePercent =
+      questions.length > 0
+        ? Number(
+            (
+              (nextScore / questions.length) *
+              100
+            ).toFixed(2)
+          )
+        : 0;
+
     if (isCorrect) {
-      setScore((previous) => previous + 1);
+      setScore(nextScore);
     }
 
-    setAnsweredCount((previous) => previous + 1);
+    setAnsweredCount(nextAnsweredCount);
 
-    const { error } = await supabase
+    /*
+     * Save the individual answer.
+     */
+
+    const { error: answerError } = await supabase
       .from("attempt_answers")
       .insert({
         attempt_id: attempt.id,
@@ -186,24 +221,36 @@ export default function PracticePage() {
         is_correct: isCorrect,
       });
 
-    if (error) {
+    if (answerError) {
       setErrorMessage(
-        `Your answer was shown, but it could not be saved: ${error.message}`
+        `Your answer was shown, but it could not be saved: ${answerError.message}`
       );
     }
 
-    const nextAnsweredCount = answeredCount + 1;
-    const nextScore =
-      score + (isCorrect ? 1 : 0);
+    /*
+     * Update the practice session using the
+     * ACTUAL attempts table columns.
+     */
 
-    await supabase
-      .from("attempts")
-      .update({
-        score: nextScore,
-        answered_questions: nextAnsweredCount,
-      })
-      .eq("id", attempt.id)
-      .eq("user_id", userId);
+    const { error: attemptUpdateError } =
+      await supabase
+        .from("attempts")
+        .update({
+          answered_questions:
+            nextAnsweredCount,
+          correct_answers:
+            nextScore,
+          score_percent:
+            scorePercent,
+        })
+        .eq("id", attempt.id)
+        .eq("user_id", userId);
+
+    if (attemptUpdateError) {
+      setErrorMessage(
+        `Answer saved, but session progress could not be updated: ${attemptUpdateError.message}`
+      );
+    }
 
     setSaving(false);
   }
@@ -213,10 +260,14 @@ export default function PracticePage() {
       router.push(
         `/practice/result?score=${score}&total=${questions.length}&attempt=${attempt?.id ?? ""}`
       );
+
       return;
     }
 
-    setCurrentIndex((previous) => previous + 1);
+    setCurrentIndex(
+      (previous) => previous + 1
+    );
+
     setSelectedAnswer("");
     setAnswered(false);
     setErrorMessage("");
@@ -228,9 +279,9 @@ export default function PracticePage() {
     }
 
     const question = questions[currentIndex];
-    const correct = normalizeAnswer(
-      question.correct_answer
-    );
+
+    const correct =
+      normalizeAnswer(question.correct_answer);
 
     if (option === correct) {
       return "practice-option practice-option-correct";
@@ -251,18 +302,29 @@ export default function PracticePage() {
       <main className="practice-page">
         <div className="practice-loading">
           <div className="loading-mark">N</div>
-          <p>Loading practice session...</p>
+
+          <p>
+            Loading practice session...
+          </p>
         </div>
       </main>
     );
   }
 
-  if (errorMessage && questions.length === 0) {
+  if (
+    errorMessage &&
+    questions.length === 0
+  ) {
     return (
       <main className="practice-page">
         <div className="practice-message-card">
-          <h1>Practice unavailable</h1>
-          <p>{errorMessage}</p>
+          <h1>
+            Practice unavailable
+          </h1>
+
+          <p>
+            {errorMessage}
+          </p>
 
           <Link
             href="/dashboard"
@@ -275,13 +337,18 @@ export default function PracticePage() {
     );
   }
 
-  const question = questions[currentIndex];
+  const question =
+    questions[currentIndex];
 
   const progress =
-    ((currentIndex + 1) / questions.length) * 100;
+    ((currentIndex + 1) /
+      questions.length) *
+    100;
 
   const correctAnswer =
-    normalizeAnswer(question.correct_answer);
+    normalizeAnswer(
+      question.correct_answer
+    );
 
   const isCurrentCorrect =
     selectedAnswer === correctAnswer;
@@ -294,12 +361,18 @@ export default function PracticePage() {
             href="/dashboard"
             className="practice-brand"
           >
-            <div className="brand-mark">N</div>
-            <span>NEET-PG Master</span>
+            <div className="brand-mark">
+              N
+            </div>
+
+            <span>
+              NEET-PG Master
+            </span>
           </Link>
 
           <div className="practice-session-score">
-            Score: <strong>{score}</strong>
+            Score:{" "}
+            <strong>{score}</strong>
           </div>
         </div>
       </header>
@@ -311,11 +384,14 @@ export default function PracticePage() {
               PRACTICE SESSION
             </span>
 
-            <h1>NEET-PG MCQs</h1>
+            <h1>
+              NEET-PG MCQs
+            </h1>
           </div>
 
           <div className="practice-progress-text">
-            Question {currentIndex + 1} of{" "}
+            Question{" "}
+            {currentIndex + 1} of{" "}
             {questions.length}
           </div>
         </div>
@@ -323,31 +399,42 @@ export default function PracticePage() {
         <div className="practice-progress-bar">
           <div
             className="practice-progress-fill"
-            style={{ width: `${progress}%` }}
+            style={{
+              width: `${progress}%`,
+            }}
           />
         </div>
 
         <article className="question-card">
           <div className="question-meta">
             {question.subject && (
-              <span>{question.subject}</span>
+              <span>
+                {question.subject}
+              </span>
             )}
 
             {question.unit && (
-              <span>{question.unit}</span>
+              <span>
+                {question.unit}
+              </span>
             )}
 
             {question.difficulty && (
-              <span>{question.difficulty}</span>
+              <span>
+                {question.difficulty}
+              </span>
             )}
 
             {question.year && (
-              <span>PYQ {question.year}</span>
+              <span>
+                PYQ {question.year}
+              </span>
             )}
           </div>
 
           <div className="question-number">
-            Question {currentIndex + 1}
+            Question{" "}
+            {currentIndex + 1}
           </div>
 
           <h2 className="question-text">
@@ -365,25 +452,34 @@ export default function PracticePage() {
           )}
 
           <div className="options-list">
-            {OPTION_KEYS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={getOptionClass(option)}
-                onClick={() =>
-                  selectAnswer(option)
-                }
-                disabled={answered || saving}
-              >
-                <span className="option-letter">
-                  {option}
-                </span>
+            {OPTION_KEYS.map(
+              (option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={getOptionClass(
+                    option
+                  )}
+                  onClick={() =>
+                    selectAnswer(option)
+                  }
+                  disabled={
+                    answered || saving
+                  }
+                >
+                  <span className="option-letter">
+                    {option}
+                  </span>
 
-                <span className="option-text">
-                  {getOptionText(question, option)}
-                </span>
-              </button>
-            ))}
+                  <span className="option-text">
+                    {getOptionText(
+                      question,
+                      option
+                    )}
+                  </span>
+                </button>
+              )
+            )}
           </div>
 
           {answered && (
@@ -402,7 +498,9 @@ export default function PracticePage() {
 
               {question.explanation && (
                 <div className="answer-explanation">
-                  <strong>Explanation</strong>
+                  <strong>
+                    Explanation
+                  </strong>
 
                   <p>
                     {question.explanation}
@@ -422,13 +520,16 @@ export default function PracticePage() {
             <div className="question-footer">
               <span>
                 {answeredCount} of{" "}
-                {questions.length} answered
+                {questions.length}{" "}
+                answered
               </span>
 
               <button
                 type="button"
                 className="practice-next-button"
-                onClick={goToNextQuestion}
+                onClick={
+                  goToNextQuestion
+                }
               >
                 {currentIndex ===
                 questions.length - 1
