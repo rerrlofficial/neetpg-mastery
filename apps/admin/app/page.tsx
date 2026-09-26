@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 export default function AdminDashboard() {
   const router = useRouter();
+
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [totalSubjects, setTotalSubjects] = useState(0);
+  const [uploadedToday, setUploadedToday] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const menuItems = [
     "Dashboard",
@@ -17,6 +23,93 @@ export default function AdminDashboard() {
     "Analytics",
     "Settings"
   ];
+
+  useEffect(() => {
+    loadDashboardStats();
+  }, []);
+
+  async function loadDashboardStats() {
+    setLoadingStats(true);
+
+    try {
+      // ----------------------------------------
+      // TOTAL QUESTIONS
+      // ----------------------------------------
+      const { count: questionCount, error: questionError } =
+        await supabase
+          .from("questions")
+          .select("id", {
+            count: "exact",
+            head: true
+          });
+
+      if (questionError) {
+        console.error(
+          "Error loading total questions:",
+          questionError
+        );
+      } else {
+        setTotalQuestions(questionCount ?? 0);
+      }
+
+      // ----------------------------------------
+      // SUBJECTS
+      // ----------------------------------------
+      const { data: subjectRows, error: subjectError } =
+        await supabase
+          .from("questions")
+          .select("subject");
+
+      if (subjectError) {
+        console.error(
+          "Error loading subjects:",
+          subjectError
+        );
+      } else {
+        const uniqueSubjects = new Set(
+          (subjectRows ?? [])
+            .map((row) => row.subject?.trim())
+            .filter(Boolean)
+        );
+
+        setTotalSubjects(uniqueSubjects.size);
+      }
+
+      // ----------------------------------------
+      // UPLOADED TODAY
+      // ----------------------------------------
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const { count: todayCount, error: todayError } =
+        await supabase
+          .from("questions")
+          .select("id", {
+            count: "exact",
+            head: true
+          })
+          .gte(
+            "created_at",
+            startOfToday.toISOString()
+          );
+
+      if (todayError) {
+        console.error(
+          "Error loading today's uploads:",
+          todayError
+        );
+      } else {
+        setUploadedToday(todayCount ?? 0);
+      }
+    } catch (error) {
+      console.error(
+        "Unexpected dashboard statistics error:",
+        error
+      );
+    } finally {
+      setLoadingStats(false);
+    }
+  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -87,7 +180,8 @@ export default function AdminDashboard() {
                 background: "#ffffff",
                 borderRadius: "14px",
                 padding: "12px 16px",
-                boxShadow: "0 4px 18px rgba(15, 23, 42, 0.06)"
+                boxShadow:
+                  "0 4px 18px rgba(15, 23, 42, 0.06)"
               }}
             >
               Administrator
@@ -100,14 +194,18 @@ export default function AdminDashboard() {
                 border: "1px solid #fecaca",
                 borderRadius: "10px",
                 padding: "12px 16px",
-                cursor: loggingOut ? "not-allowed" : "pointer",
+                cursor: loggingOut
+                  ? "not-allowed"
+                  : "pointer",
                 background: "#ffffff",
                 color: "#dc2626",
                 fontWeight: 700,
                 opacity: loggingOut ? 0.6 : 1
               }}
             >
-              {loggingOut ? "Signing out..." : "Sign Out"}
+              {loggingOut
+                ? "Signing out..."
+                : "Sign Out"}
             </button>
           </div>
         </header>
@@ -130,9 +228,13 @@ export default function AdminDashboard() {
                 padding: "12px 16px",
                 cursor: "pointer",
                 background:
-                  activeTab === item ? "#2563eb" : "#ffffff",
+                  activeTab === item
+                    ? "#2563eb"
+                    : "#ffffff",
                 color:
-                  activeTab === item ? "#ffffff" : "#334155",
+                  activeTab === item
+                    ? "#ffffff"
+                    : "#334155",
                 fontWeight: 600
               }}
             >
@@ -146,7 +248,8 @@ export default function AdminDashboard() {
             background: "#ffffff",
             borderRadius: "20px",
             padding: "28px",
-            boxShadow: "0 6px 24px rgba(15, 23, 42, 0.06)",
+            boxShadow:
+              "0 6px 24px rgba(15, 23, 42, 0.06)",
             marginBottom: "24px"
           }}
         >
@@ -176,8 +279,9 @@ export default function AdminDashboard() {
               marginBottom: 0
             }}
           >
-            Manage your NEET-PG question bank, organize subjects,
-            import questions, and monitor student learning activity.
+            Manage your NEET-PG question bank, organize
+            subjects, import questions, and monitor
+            student learning activity.
           </p>
         </section>
 
@@ -190,10 +294,37 @@ export default function AdminDashboard() {
             marginBottom: "24px"
           }}
         >
-          <StatCard title="Total Questions" value="0" />
-          <StatCard title="Subjects" value="0" />
-          <StatCard title="Uploaded Today" value="0" />
-          <StatCard title="Active Students" value="0" />
+          <StatCard
+            title="Total Questions"
+            value={
+              loadingStats
+                ? "..."
+                : totalQuestions.toLocaleString()
+            }
+          />
+
+          <StatCard
+            title="Subjects"
+            value={
+              loadingStats
+                ? "..."
+                : totalSubjects.toLocaleString()
+            }
+          />
+
+          <StatCard
+            title="Uploaded Today"
+            value={
+              loadingStats
+                ? "..."
+                : uploadedToday.toLocaleString()
+            }
+          />
+
+          <StatCard
+            title="Active Students"
+            value="0"
+          />
         </section>
 
         <section
@@ -201,7 +332,8 @@ export default function AdminDashboard() {
             background: "#ffffff",
             borderRadius: "20px",
             padding: "28px",
-            boxShadow: "0 6px 24px rgba(15, 23, 42, 0.06)"
+            boxShadow:
+              "0 6px 24px rgba(15, 23, 42, 0.06)"
           }}
         >
           <h2
@@ -232,14 +364,18 @@ export default function AdminDashboard() {
             </a>
 
             <button
-              onClick={() => setActiveTab("Question Bank")}
+              onClick={() =>
+                router.push("/questions")
+              }
               style={secondaryButtonStyle}
             >
               View Question Bank
             </button>
 
             <button
-              onClick={() => setActiveTab("Subjects")}
+              onClick={() =>
+                setActiveTab("Subjects")
+              }
               style={secondaryButtonStyle}
             >
               Manage Subjects
@@ -264,7 +400,8 @@ function StatCard({
         background: "#ffffff",
         borderRadius: "18px",
         padding: "22px",
-        boxShadow: "0 6px 24px rgba(15, 23, 42, 0.06)"
+        boxShadow:
+          "0 6px 24px rgba(15, 23, 42, 0.06)"
       }}
     >
       <p
