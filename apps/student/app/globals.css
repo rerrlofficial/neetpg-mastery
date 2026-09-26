@@ -288,3 +288,13 @@ a {
     font-size: 27px;
   }
 }
+.auth-success {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  color: #067647;
+  font-size: 14px;
+  line-height: 1.45;
+}
