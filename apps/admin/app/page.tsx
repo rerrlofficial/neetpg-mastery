@@ -1,633 +1,447 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabase";
 
-type Subject = {
-  id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-};
+export default function AdminDashboard() {
+  const router = useRouter();
 
-export default function SubjectsPage() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("Dashboard");
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [totalSubjects, setTotalSubjects] = useState(0);
+  const [uploadedToday, setUploadedToday] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const menuItems = [
+    "Dashboard",
+    "Question Bank",
+    "Upload Questions",
+    "Subjects",
+    "Analytics",
+    "Settings"
+  ];
 
   useEffect(() => {
-    loadSubjects();
+    loadDashboardStats();
   }, []);
 
-  async function loadSubjects() {
-    setLoading(true);
-    setError("");
+  async function loadDashboardStats() {
+    setLoadingStats(true);
 
-    const { data, error } = await supabase
-      .from("subjects")
-      .select("*")
-      .order("name", { ascending: true });
+    try {
+      // ----------------------------------------
+      // TOTAL QUESTIONS
+      // ----------------------------------------
+      const { count: questionCount, error: questionError } =
+        await supabase
+          .from("questions")
+          .select("id", {
+            count: "exact",
+            head: true
+          });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    setSubjects(data ?? []);
-    setLoading(false);
-  }
-
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    setError("");
-    setSuccess("");
-
-    const trimmedName = name.trim();
-    const trimmedDescription = description.trim();
-
-    if (!trimmedName) {
-      setError("Subject name is required.");
-      return;
-    }
-
-    setSaving(true);
-
-    if (editingId) {
-      const { error } = await supabase
-        .from("subjects")
-        .update({
-          name: trimmedName,
-          description:
-            trimmedDescription || null
-        })
-        .eq("id", editingId);
-
-      if (error) {
-        setError(error.message);
-        setSaving(false);
-        return;
+      if (questionError) {
+        console.error(
+          "Error loading total questions:",
+          questionError
+        );
+      } else {
+        setTotalQuestions(questionCount ?? 0);
       }
 
-      setSuccess("Subject updated successfully.");
-    } else {
-      const { error } = await supabase
-        .from("subjects")
-        .insert({
-          name: trimmedName,
-          description:
-            trimmedDescription || null
-        });
+      // ----------------------------------------
+      // SUBJECTS
+      // ----------------------------------------
+      const { data: subjectRows, error: subjectError } =
+        await supabase
+          .from("questions")
+          .select("subject");
 
-      if (error) {
-        if (error.code === "23505") {
-          setError(
-            "A subject with this name already exists."
+      if (subjectError) {
+        console.error(
+          "Error loading subjects:",
+          subjectError
+        );
+      } else {
+        const uniqueSubjects = new Set(
+          (subjectRows ?? [])
+            .map((row) => row.subject?.trim())
+            .filter(Boolean)
+        );
+
+        setTotalSubjects(uniqueSubjects.size);
+      }
+
+      // ----------------------------------------
+      // UPLOADED TODAY
+      // ----------------------------------------
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const { count: todayCount, error: todayError } =
+        await supabase
+          .from("questions")
+          .select("id", {
+            count: "exact",
+            head: true
+          })
+          .gte(
+            "created_at",
+            startOfToday.toISOString()
           );
-        } else {
-          setError(error.message);
-        }
 
-        setSaving(false);
-        return;
+      if (todayError) {
+        console.error(
+          "Error loading today's uploads:",
+          todayError
+        );
+      } else {
+        setUploadedToday(todayCount ?? 0);
       }
-
-      setSuccess("Subject added successfully.");
+    } catch (error) {
+      console.error(
+        "Unexpected dashboard statistics error:",
+        error
+      );
+    } finally {
+      setLoadingStats(false);
     }
-
-    setName("");
-    setDescription("");
-    setEditingId(null);
-    setSaving(false);
-
-    await loadSubjects();
   }
 
-  function startEdit(subject: Subject) {
-    setEditingId(subject.id);
-    setName(subject.name);
-    setDescription(subject.description ?? "");
-    setError("");
-    setSuccess("");
+  async function handleLogout() {
+    setLoggingOut(true);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
+    await supabase.auth.signOut();
+
+    router.replace("/login");
+    router.refresh();
   }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setName("");
-    setDescription("");
-    setError("");
-    setSuccess("");
-  }
-
-  async function deleteSubject(subject: Subject) {
-    const confirmed = window.confirm(
-      `Delete "${subject.name}"?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-
-    const { error } = await supabase
-      .from("subjects")
-      .delete()
-      .eq("id", subject.id);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    setSuccess("Subject deleted successfully.");
-    await loadSubjects();
-  }
-
-  const filteredSubjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    if (!query) {
-      return subjects;
-    }
-
-    return subjects.filter((subject) =>
-      `${subject.name} ${
-        subject.description ?? ""
-      }`
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [subjects, search]);
 
   return (
-    <main style={styles.page}>
-      <div style={styles.container}>
-
-        <header style={styles.header}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#f5f7fb",
+        color: "#172033",
+        fontFamily: "Arial, sans-serif",
+        padding: "24px"
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto"
+        }}
+      >
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+            marginBottom: "32px"
+          }}
+        >
           <div>
-            <p style={styles.eyebrow}>
+            <p
+              style={{
+                margin: 0,
+                color: "#64748b",
+                fontSize: "14px"
+              }}
+            >
               NEET-PG MASTER
             </p>
 
-            <h1 style={styles.title}>
-              Subjects
+            <h1
+              style={{
+                margin: "8px 0 0",
+                fontSize: "32px"
+              }}
+            >
+              Admin Dashboard
             </h1>
-
-            <p style={styles.subtitle}>
-              Manage the subjects used throughout your
-              NEET-PG question bank.
-            </p>
           </div>
 
-          <a href="/" style={styles.backButton}>
-            ← Dashboard
-          </a>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap"
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "14px",
+                padding: "12px 16px",
+                boxShadow:
+                  "0 4px 18px rgba(15, 23, 42, 0.06)"
+              }}
+            >
+              Administrator
+            </div>
+
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                border: "1px solid #fecaca",
+                borderRadius: "10px",
+                padding: "12px 16px",
+                cursor: loggingOut
+                  ? "not-allowed"
+                  : "pointer",
+                background: "#ffffff",
+                color: "#dc2626",
+                fontWeight: 700,
+                opacity: loggingOut ? 0.6 : 1
+              }}
+            >
+              {loggingOut
+                ? "Signing out..."
+                : "Sign Out"}
+            </button>
+          </div>
         </header>
 
-        <section style={styles.formCard}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>
-                {editingId
-                  ? "Edit Subject"
-                  : "Add Subject"}
-              </h2>
+        <nav
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+            marginBottom: "28px"
+          }}
+        >
+          {menuItems.map((item) => (
+            <button
+              key={item}
+              onClick={() => setActiveTab(item)}
+              style={{
+                border: "none",
+                borderRadius: "10px",
+                padding: "12px 16px",
+                cursor: "pointer",
+                background:
+                  activeTab === item
+                    ? "#2563eb"
+                    : "#ffffff",
+                color:
+                  activeTab === item
+                    ? "#ffffff"
+                    : "#334155",
+                fontWeight: 600
+              }}
+            >
+              {item}
+            </button>
+          ))}
+        </nav>
 
-              <p style={styles.sectionSubtitle}>
-                {editingId
-                  ? "Update the selected subject."
-                  : "Create a new NEET-PG subject."}
-              </p>
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            style={styles.form}
+        <section
+          style={{
+            background: "#ffffff",
+            borderRadius: "20px",
+            padding: "28px",
+            boxShadow:
+              "0 6px 24px rgba(15, 23, 42, 0.06)",
+            marginBottom: "24px"
+          }}
+        >
+          <p
+            style={{
+              color: "#64748b",
+              margin: 0,
+              fontSize: "14px"
+            }}
           >
-            <div style={styles.field}>
-              <label style={styles.label}>
-                Subject Name
-              </label>
+            CURRENT SECTION
+          </p>
 
-              <input
-                value={name}
-                onChange={(event) =>
-                  setName(event.target.value)
-                }
-                placeholder="e.g. Anatomy"
-                required
-                style={styles.input}
-              />
-            </div>
+          <h2
+            style={{
+              fontSize: "26px",
+              margin: "10px 0"
+            }}
+          >
+            {activeTab}
+          </h2>
 
-            <div style={styles.field}>
-              <label style={styles.label}>
-                Description
-              </label>
-
-              <textarea
-                value={description}
-                onChange={(event) =>
-                  setDescription(event.target.value)
-                }
-                placeholder="Optional description"
-                rows={3}
-                style={styles.textarea}
-              />
-            </div>
-
-            {error && (
-              <div style={styles.error}>
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div style={styles.success}>
-                {success}
-              </div>
-            )}
-
-            <div style={styles.formActions}>
-              <button
-                type="submit"
-                disabled={saving}
-                style={styles.primaryButton}
-              >
-                {saving
-                  ? "Saving..."
-                  : editingId
-                    ? "Update Subject"
-                    : "Add Subject"}
-              </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  style={styles.secondaryButton}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
+          <p
+            style={{
+              color: "#64748b",
+              lineHeight: 1.6,
+              marginBottom: 0
+            }}
+          >
+            Manage your NEET-PG question bank, organize
+            subjects, import questions, and monitor
+            student learning activity.
+          </p>
         </section>
 
-        <section style={styles.listCard}>
-          <div style={styles.listHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>
-                Subject List
-              </h2>
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "16px",
+            marginBottom: "24px"
+          }}
+        >
+          <StatCard
+            title="Total Questions"
+            value={
+              loadingStats
+                ? "..."
+                : totalQuestions.toLocaleString()
+            }
+          />
 
-              <p style={styles.sectionSubtitle}>
-                {subjects.length} subject
-                {subjects.length === 1 ? "" : "s"}
-              </p>
-            </div>
+          <StatCard
+            title="Subjects"
+            value={
+              loadingStats
+                ? "..."
+                : totalSubjects.toLocaleString()
+            }
+          />
 
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
+          <StatCard
+            title="Uploaded Today"
+            value={
+              loadingStats
+                ? "..."
+                : uploadedToday.toLocaleString()
+            }
+          />
+
+          <StatCard
+            title="Active Students"
+            value="0"
+          />
+        </section>
+
+        <section
+          style={{
+            background: "#ffffff",
+            borderRadius: "20px",
+            padding: "28px",
+            boxShadow:
+              "0 6px 24px rgba(15, 23, 42, 0.06)"
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              fontSize: "22px"
+            }}
+          >
+            Quick Actions
+          </h2>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "12px"
+            }}
+          >
+            <a
+              href="/upload"
+              style={{
+                ...actionButtonStyle,
+                display: "inline-block",
+                textDecoration: "none"
+              }}
+            >
+              Upload Excel Questions
+            </a>
+
+            <button
+              onClick={() =>
+                router.push("/questions")
               }
-              placeholder="Search subjects..."
-              style={styles.searchInput}
-            />
+              style={secondaryButtonStyle}
+            >
+              View Question Bank
+            </button>
+
+            <button
+              onClick={() =>
+                setActiveTab("Subjects")
+              }
+              style={secondaryButtonStyle}
+            >
+              Manage Subjects
+            </button>
           </div>
-
-          {loading ? (
-            <div style={styles.empty}>
-              Loading subjects...
-            </div>
-          ) : filteredSubjects.length === 0 ? (
-            <div style={styles.empty}>
-              {search
-                ? "No subjects match your search."
-                : "No subjects found."}
-            </div>
-          ) : (
-            <div style={styles.subjectList}>
-              {filteredSubjects.map((subject) => (
-                <div
-                  key={subject.id}
-                  style={styles.subjectCard}
-                >
-                  <div style={styles.subjectInfo}>
-                    <h3 style={styles.subjectName}>
-                      {subject.name}
-                    </h3>
-
-                    <p style={styles.subjectDescription}>
-                      {subject.description ||
-                        "No description added."}
-                    </p>
-                  </div>
-
-                  <div style={styles.subjectActions}>
-                    <button
-                      onClick={() =>
-                        startEdit(subject)
-                      }
-                      style={styles.editButton}
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        deleteSubject(subject)
-                      }
-                      style={styles.deleteButton}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </section>
-
       </div>
     </main>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f5f7fb",
-    color: "#172033",
-    fontFamily: "Arial, sans-serif",
-    padding: "24px"
-  },
+function StatCard({
+  title,
+  value
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        borderRadius: "18px",
+        padding: "22px",
+        boxShadow:
+          "0 6px 24px rgba(15, 23, 42, 0.06)"
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          color: "#64748b",
+          fontSize: "14px"
+        }}
+      >
+        {title}
+      </p>
 
-  container: {
-    maxWidth: "1100px",
-    margin: "0 auto"
-  },
+      <h3
+        style={{
+          fontSize: "30px",
+          margin: "12px 0 0"
+        }}
+      >
+        {value}
+      </h3>
+    </div>
+  );
+}
 
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    gap: "16px",
-    marginBottom: "24px"
-  },
+const actionButtonStyle = {
+  border: "none",
+  borderRadius: "10px",
+  padding: "14px 18px",
+  cursor: "pointer",
+  background: "#2563eb",
+  color: "#ffffff",
+  fontWeight: 600
+};
 
-  eyebrow: {
-    margin: 0,
-    color: "#2563eb",
-    fontSize: "13px",
-    fontWeight: 800,
-    letterSpacing: "0.8px"
-  },
-
-  title: {
-    margin: "7px 0 5px",
-    fontSize: "32px"
-  },
-
-  subtitle: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.5
-  },
-
-  backButton: {
-    display: "inline-block",
-    textDecoration: "none",
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #dbe3ef",
-    borderRadius: "10px",
-    padding: "11px 15px",
-    fontWeight: 700
-  },
-
-  formCard: {
-    background: "#ffffff",
-    borderRadius: "20px",
-    padding: "26px",
-    boxShadow:
-      "0 6px 24px rgba(15, 23, 42, 0.06)",
-    marginBottom: "24px"
-  },
-
-  listCard: {
-    background: "#ffffff",
-    borderRadius: "20px",
-    padding: "26px",
-    boxShadow:
-      "0 6px 24px rgba(15, 23, 42, 0.06)"
-  },
-
-  sectionHeader: {
-    marginBottom: "20px"
-  },
-
-  sectionTitle: {
-    margin: 0,
-    fontSize: "21px"
-  },
-
-  sectionSubtitle: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: "14px"
-  },
-
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "16px"
-  },
-
-  field: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "7px"
-  },
-
-  label: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#334155"
-  },
-
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "13px 14px",
-    border: "1px solid #cbd5e1",
-    borderRadius: "10px",
-    background: "#ffffff",
-    color: "#172033",
-    fontSize: "15px"
-  },
-
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "13px 14px",
-    border: "1px solid #cbd5e1",
-    borderRadius: "10px",
-    background: "#ffffff",
-    color: "#172033",
-    fontSize: "15px",
-    resize: "vertical"
-  },
-
-  formActions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "10px"
-  },
-
-  primaryButton: {
-    border: "none",
-    borderRadius: "10px",
-    padding: "13px 18px",
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 800,
-    cursor: "pointer"
-  },
-
-  secondaryButton: {
-    border: "1px solid #dbe3ef",
-    borderRadius: "10px",
-    padding: "13px 18px",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer"
-  },
-
-  error: {
-    padding: "11px 13px",
-    borderRadius: "9px",
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    color: "#b91c1c",
-    fontSize: "13px"
-  },
-
-  success: {
-    padding: "11px 13px",
-    borderRadius: "9px",
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
-    color: "#15803d",
-    fontSize: "13px"
-  },
-
-  listHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "14px",
-    marginBottom: "20px"
-  },
-
-  searchInput: {
-    width: "260px",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    padding: "11px 13px",
-    border: "1px solid #cbd5e1",
-    borderRadius: "10px",
-    background: "#ffffff",
-    color: "#172033",
-    fontSize: "14px"
-  },
-
-  empty: {
-    padding: "40px 20px",
-    textAlign: "center",
-    color: "#64748b"
-  },
-
-  subjectList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px"
-  },
-
-  subjectCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "16px",
-    flexWrap: "wrap",
-    padding: "18px",
-    border: "1px solid #e2e8f0",
-    borderRadius: "14px"
-  },
-
-  subjectInfo: {
-    minWidth: 0,
-    flex: 1
-  },
-
-  subjectName: {
-    margin: 0,
-    fontSize: "17px"
-  },
-
-  subjectDescription: {
-    margin: "6px 0 0",
-    color: "#64748b",
-    fontSize: "14px",
-    lineHeight: 1.5
-  },
-
-  subjectActions: {
-    display: "flex",
-    gap: "8px",
-    flexShrink: 0
-  },
-
-  editButton: {
-    border: "1px solid #dbe3ef",
-    borderRadius: "9px",
-    padding: "9px 13px",
-    background: "#ffffff",
-    color: "#2563eb",
-    fontWeight: 700,
-    cursor: "pointer"
-  },
-
-  deleteButton: {
-    border: "1px solid #fecaca",
-    borderRadius: "9px",
-    padding: "9px 13px",
-    background: "#ffffff",
-    color: "#dc2626",
-    fontWeight: 700,
-    cursor: "pointer"
-  }
+const secondaryButtonStyle = {
+  border: "1px solid #dbe3ef",
+  borderRadius: "10px",
+  padding: "14px 18px",
+  cursor: "pointer",
+  background: "#ffffff",
+  color: "#334155",
+  fontWeight: 600
 };
