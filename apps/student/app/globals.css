@@ -298,3 +298,374 @@ a {
   font-size: 14px;
   line-height: 1.45;
 }
+.dashboard-page {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+.dashboard-container {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.dashboard-topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.dashboard-nav {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-brand-title {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.dashboard-brand-subtitle {
+  color: #667085;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.logout-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #d9dee8;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #172033;
+  font-weight: 700;
+}
+
+.logout-button:hover {
+  background: #f5f7fb;
+}
+
+.dashboard-main {
+  padding-top: 42px;
+  padding-bottom: 60px;
+}
+
+.dashboard-welcome {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.dashboard-eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: #667085;
+}
+
+.dashboard-welcome h1 {
+  margin: 8px 0 0;
+  font-size: clamp(30px, 5vw, 42px);
+  letter-spacing: -1px;
+}
+
+.dashboard-welcome p {
+  margin: 10px 0 0;
+  color: #667085;
+}
+
+.dashboard-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  background: #172033;
+  color: #ffffff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dashboard-primary-button:hover {
+  opacity: 0.92;
+}
+
+.dashboard-error {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff1f0;
+  border: 1px solid #ffd5d2;
+  color: #b42318;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.dashboard-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e7eaf0;
+  border-radius: 16px;
+}
+
+.dashboard-stat-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #f0f2f6;
+  font-weight: 800;
+  color: #172033;
+}
+
+.dashboard-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.dashboard-stat-label {
+  margin-top: 2px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.dashboard-section-heading {
+  margin-top: 42px;
+  margin-bottom: 18px;
+}
+
+.dashboard-section-heading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.dashboard-section-heading p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.dashboard-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.dashboard-action-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 150px;
+  padding: 22px;
+  background: #ffffff;
+  border: 1px solid #e7eaf0;
+  border-radius: 18px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.dashboard-action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(23, 32, 51, 0.07);
+}
+
+.dashboard-action-featured {
+  background: #172033;
+  color: #ffffff;
+  border-color: #172033;
+}
+
+.action-card-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #f0f2f6;
+  color: #172033;
+  font-weight: 800;
+}
+
+.dashboard-action-featured .action-card-icon {
+  background: #ffffff;
+  color: #172033;
+}
+
+.dashboard-action-card h3 {
+  margin: 2px 0 7px;
+  font-size: 18px;
+}
+
+.dashboard-action-card p {
+  margin: 0;
+  color: #667085;
+  line-height: 1.5;
+  font-size: 14px;
+  max-width: 380px;
+}
+
+.dashboard-action-featured p {
+  color: #d0d5dd;
+}
+
+.action-arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  font-size: 20px;
+  color: #98a2b3;
+}
+
+.dashboard-action-featured .action-arrow {
+  color: #ffffff;
+}
+
+.dashboard-target-card {
+  margin-top: 24px;
+  padding: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: #ffffff;
+  border: 1px solid #e7eaf0;
+  border-radius: 18px;
+}
+
+.dashboard-target-label {
+  font-size: 11px;
+  letter-spacing: 1.1px;
+  font-weight: 800;
+  color: #667085;
+}
+
+.dashboard-target-card h2 {
+  margin: 6px 0;
+  font-size: 25px;
+}
+
+.dashboard-target-card p {
+  margin: 0;
+  color: #667085;
+  line-height: 1.5;
+  max-width: 620px;
+}
+
+.dashboard-outline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #172033;
+  border-radius: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dashboard-outline-button:hover {
+  background: #172033;
+  color: #ffffff;
+}
+
+.dashboard-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  color: #667085;
+}
+
+.loading-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #172033;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+@media (max-width: 800px) {
+  .dashboard-welcome {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-primary-button {
+    width: 100%;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-target-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-outline-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-main {
+    padding-top: 28px;
+  }
+
+  .dashboard-container {
+    width: min(100% - 24px, 1100px);
+  }
+
+  .dashboard-nav {
+    min-height: 64px;
+  }
+
+  .dashboard-brand-title {
+    font-size: 15px;
+  }
+
+  .dashboard-brand-subtitle {
+    display: none;
+  }
+
+  .logout-button {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .dashboard-action-card {
+    min-height: 135px;
+    padding: 18px;
+  }
+}
