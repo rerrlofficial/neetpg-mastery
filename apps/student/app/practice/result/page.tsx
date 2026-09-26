@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
@@ -13,7 +17,7 @@ type Attempt = {
   score_percent: number;
 };
 
-export default function PracticeResultPage() {
+function ResultContent() {
   const searchParams = useSearchParams();
 
   const attemptId = searchParams.get("attempt");
@@ -21,7 +25,9 @@ export default function PracticeResultPage() {
   const [attempt, setAttempt] =
     useState<Attempt | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
+
   const [errorMessage, setErrorMessage] =
     useState("");
 
@@ -34,6 +40,7 @@ export default function PracticeResultPage() {
       setErrorMessage(
         "Practice session could not be found."
       );
+
       setLoading(false);
       return;
     }
@@ -76,8 +83,13 @@ export default function PracticeResultPage() {
     return (
       <main className="result-page">
         <div className="result-loading">
-          <div className="loading-mark">N</div>
-          <p>Calculating your result...</p>
+          <div className="loading-mark">
+            N
+          </div>
+
+          <p>
+            Calculating your result...
+          </p>
         </div>
       </main>
     );
@@ -87,9 +99,13 @@ export default function PracticeResultPage() {
     return (
       <main className="result-page">
         <div className="result-card">
-          <div className="result-icon">!</div>
+          <div className="result-icon">
+            !
+          </div>
 
-          <h1>Result unavailable</h1>
+          <h1>
+            Result unavailable
+          </h1>
 
           <p>
             {errorMessage ||
@@ -111,19 +127,17 @@ export default function PracticeResultPage() {
     attempt.score_percent || 0
   );
 
-  const incorrect =
-    Math.max(
-      attempt.answered_questions -
-        attempt.correct_answers,
-      0
-    );
+  const incorrect = Math.max(
+    attempt.answered_questions -
+      attempt.correct_answers,
+    0
+  );
 
-  const unanswered =
-    Math.max(
-      attempt.total_questions -
-        attempt.answered_questions,
-      0
-    );
+  const unanswered = Math.max(
+    attempt.total_questions -
+      attempt.answered_questions,
+    0
+  );
 
   let performanceMessage =
     "Keep practicing consistently.";
@@ -147,9 +161,13 @@ export default function PracticeResultPage() {
             href="/dashboard"
             className="result-brand"
           >
-            <div className="brand-mark">N</div>
+            <div className="brand-mark">
+              N
+            </div>
 
-            <span>NEET-PG Master</span>
+            <span>
+              NEET-PG Master
+            </span>
           </Link>
         </div>
       </header>
@@ -164,7 +182,9 @@ export default function PracticeResultPage() {
             PRACTICE COMPLETE
           </span>
 
-          <h1>Session completed 🎉</h1>
+          <h1>
+            Session completed 🎉
+          </h1>
 
           <p className="result-message">
             {performanceMessage}
@@ -224,7 +244,7 @@ export default function PracticeResultPage() {
 
           <div className="result-actions">
             <Link
-              href="/practice"
+              href="/practice/setup"
               className="result-primary-button"
             >
               Practice Again
@@ -240,5 +260,29 @@ export default function PracticeResultPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function ResultLoading() {
+  return (
+    <main className="result-page">
+      <div className="result-loading">
+        <div className="loading-mark">
+          N
+        </div>
+
+        <p>
+          Loading result...
+        </p>
+      </div>
+    </main>
+  );
+}
+
+export default function PracticeResultPage() {
+  return (
+    <Suspense fallback={<ResultLoading />}>
+      <ResultContent />
+    </Suspense>
   );
 }
