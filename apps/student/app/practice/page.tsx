@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 type Question = {
@@ -22,53 +26,81 @@ type Question = {
   difficulty: string | null;
   question_type: string | null;
   year: number | null;
+  is_pyq: boolean;
 };
 
-type Attempt = {
-  id: string;
-};
-
-const OPTION_KEYS = ["A", "B", "C", "D"] as const;
-
-export default function PracticePage() {
+function PracticeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const subject = searchParams.get("subject") || "";
+  const unit = searchParams.get("unit") || "";
+  const difficulty = searchParams.get("difficulty") || "";
+  const pyq = searchParams.get("pyq") || "all";
+
+  const requestedCount = Number(
+    searchParams.get("count") || "10"
+  );
+
+  const questionCount = [10, 20, 30, 50].includes(
+    requestedCount
+  )
+    ? requestedCount
+    : 10;
+
+  const initializedRef = useRef(false);
+
+  const [questions, setQuestions] = useState<Question[]>(
+    []
+  );
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState("");
-  const [answered, setAnswered] = useState(false);
 
-  const [userId, setUserId] = useState("");
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [selectedAnswer, setSelectedAnswer] =
+    useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [showExplanation, setShowExplanation] =
+    useState(false);
 
   const [score, setScore] = useState(0);
-  const [answeredCount, setAnsweredCount] = useState(0);
+
+  const [answeredCount, setAnsweredCount] =
+    useState(0);
+
+  const [attemptId, setAttemptId] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [saving, setSaving] = useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
   useEffect(() => {
-    initializePractice();
+    if (initializedRef.current) {
+      return;
+    }
+
+    initializedRef.current = true;
+
+    startPractice();
   }, []);
 
-  async function initializePractice() {
+  async function startPractice() {
     setLoading(true);
     setErrorMessage("");
 
     const {
       data: { user },
-      error: userError,
     } = await supabase.auth.getUser();
 
-    if (userError || !user) {
+    if (!user) {
       router.replace("/login");
       return;
     }
 
-    setUserId(user.id);
-
-    const { data, error } = await supabase
+    let query = supabase
       .from("questions")
       .select(
         `
@@ -87,12 +119,33 @@ export default function PracticePage() {
         image_url,
         difficulty,
         question_type,
-        year
+        year,
+        is_pyq
         `
       )
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(20);
+      .eq("is_active", true);
+
+    if (subject) {
+      query = query.eq("subject", subject);
+    }
+
+    if (unit) {
+      query = query.eq("unit", unit);
+    }
+
+    if (difficulty) {
+      query = query.eq("difficulty", difficulty);
+    }
+
+    if (pyq === "pyq") {
+      query = query.eq("is_pyq", true);
+    }
+
+    if (pyq === "non-pyq") {
+      query = query.eq("is_pyq", false);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       setErrorMessage(error.message);
@@ -101,20 +154,37 @@ export default function PracticePage() {
     }
 
     if (!data || data.length === 0) {
-      setErrorMessage("No active questions are available yet.");
+      setErrorMessage(
+        "No questions match the selected filters. Try changing the subject, unit, difficulty or PYQ filter."
+      );
+
       setLoading(false);
       return;
     }
 
-    setQuestions(data as Question[]);
+    /*
+     * Shuffle the matching question pool.
+     * We fetch the matching pool first and then
+     * randomly select the requested number.
+     */
+    const shuffled = [...(data as Question[])].sort(
+      () => Math.random() - 0.5
+    );
 
-    const { data: attemptData, error: attemptError } =
+    const selectedQuestions = shuffled.slice(
+      0,
+      Math.min(questionCount, shuffled.length)
+    );
+
+    const { data: attempt, error: attemptError } =
       await supabase
         .from("attempts")
         .insert({
           user_id: user.id,
-          total_questions: data.length,
-          score: 0,
+          total_questions: selectedQuestions.length,
+          answered_questions: 0,
+          correct_answers: 0,
+          score_percent: 0,
         })
         .select("id")
         .single();
@@ -123,127 +193,134 @@ export default function PracticePage() {
       setErrorMessage(
         `Questions loaded, but the practice session could not be created: ${attemptError.message}`
       );
+
       setLoading(false);
       return;
     }
 
-    setAttempt(attemptData);
+    setQuestions(selectedQuestions);
+    setAttemptId(attempt.id);
     setLoading(false);
   }
 
-  function getOptionText(
-    question: Question,
-    option: string
-  ) {
-    if (option === "A") return question.option_a;
-    if (option === "B") return question.option_b;
-    if (option === "C") return question.option_c;
-    return question.option_d;
-  }
-
-  function normalizeAnswer(answer: string) {
-    const cleaned = answer.trim().toUpperCase();
-
-    if (cleaned.startsWith("A")) return "A";
-    if (cleaned.startsWith("B")) return "B";
-    if (cleaned.startsWith("C")) return "C";
-    if (cleaned.startsWith("D")) return "D";
-
-    return cleaned;
-  }
-
   async function selectAnswer(answer: string) {
-    if (answered || saving) return;
+    if (
+      saving ||
+      selectedAnswer ||
+      !questions[currentIndex] ||
+      !attemptId
+    ) {
+      return;
+    }
 
-    const question = questions[currentIndex];
-
-    if (!question || !attempt || !userId) return;
-
-    setSelectedAnswer(answer);
-    setAnswered(true);
-    setSaving(true);
-
-    const normalizedCorrect = normalizeAnswer(
-      question.correct_answer
-    );
+    const currentQuestion =
+      questions[currentIndex];
 
     const isCorrect =
-      answer === normalizedCorrect;
+      answer === currentQuestion.correct_answer;
 
-    if (isCorrect) {
-      setScore((previous) => previous + 1);
+    const nextScore = isCorrect
+      ? score + 1
+      : score;
+
+    const nextAnsweredCount =
+      answeredCount + 1;
+
+    setSelectedAnswer(answer);
+    setScore(nextScore);
+    setAnsweredCount(nextAnsweredCount);
+    setShowExplanation(true);
+    setSaving(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaving(false);
+      router.replace("/login");
+      return;
     }
 
-    setAnsweredCount((previous) => previous + 1);
+    const { error: answerError } =
+      await supabase
+        .from("attempt_answers")
+        .insert({
+          attempt_id: attemptId,
+          user_id: user.id,
+          question_id: currentQuestion.id,
+          selected_answer: answer,
+          is_correct: isCorrect,
+        });
 
-    const { error } = await supabase
-      .from("attempt_answers")
-      .insert({
-        attempt_id: attempt.id,
-        user_id: userId,
-        question_id: question.id,
-        selected_answer: answer,
-        is_correct: isCorrect,
-      });
-
-    if (error) {
+    if (answerError) {
       setErrorMessage(
-        `Your answer was shown, but it could not be saved: ${error.message}`
+        `Your answer could not be saved: ${answerError.message}`
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    const scorePercent =
+      selectedQuestionsPercent(
+        nextScore,
+        questions.length
+      );
+
+    const { error: attemptUpdateError } =
+      await supabase
+        .from("attempts")
+        .update({
+          answered_questions:
+            nextAnsweredCount,
+          correct_answers: nextScore,
+          score_percent: scorePercent,
+        })
+        .eq("id", attemptId)
+        .eq("user_id", user.id);
+
+    if (attemptUpdateError) {
+      setErrorMessage(
+        `Your answer was saved, but the practice score could not be updated: ${attemptUpdateError.message}`
       );
     }
-
-    const nextAnsweredCount = answeredCount + 1;
-    const nextScore =
-      score + (isCorrect ? 1 : 0);
-
-    await supabase
-      .from("attempts")
-      .update({
-        score: nextScore,
-        answered_questions: nextAnsweredCount,
-      })
-      .eq("id", attempt.id)
-      .eq("user_id", userId);
 
     setSaving(false);
   }
 
+  function selectedQuestionsPercent(
+    correct: number,
+    total: number
+  ) {
+    if (!total) {
+      return 0;
+    }
+
+    return Number(
+      ((correct / total) * 100).toFixed(2)
+    );
+  }
+
   function goToNextQuestion() {
-    if (currentIndex >= questions.length - 1) {
-      router.push(
-        `/practice/result?score=${score}&total=${questions.length}&attempt=${attempt?.id ?? ""}`
-      );
+    if (
+      currentIndex >= questions.length - 1
+    ) {
+      if (attemptId) {
+        router.push(
+          `/practice/result?attempt=${attemptId}`
+        );
+      }
+
       return;
     }
 
-    setCurrentIndex((previous) => previous + 1);
-    setSelectedAnswer("");
-    setAnswered(false);
-    setErrorMessage("");
-  }
-
-  function getOptionClass(option: string) {
-    if (!answered) {
-      return "practice-option";
-    }
-
-    const question = questions[currentIndex];
-    const correct = normalizeAnswer(
-      question.correct_answer
+    setCurrentIndex(
+      (previous) => previous + 1
     );
 
-    if (option === correct) {
-      return "practice-option practice-option-correct";
-    }
-
-    if (
-      option === selectedAnswer &&
-      option !== correct
-    ) {
-      return "practice-option practice-option-wrong";
-    }
-
-    return "practice-option practice-option-disabled";
+    setSelectedAnswer(null);
+    setShowExplanation(false);
   }
 
   if (loading) {
@@ -251,194 +328,261 @@ export default function PracticePage() {
       <main className="practice-page">
         <div className="practice-loading">
           <div className="loading-mark">N</div>
-          <p>Loading practice session...</p>
+
+          <p>
+            Preparing your practice session...
+          </p>
         </div>
       </main>
     );
   }
 
-  if (errorMessage && questions.length === 0) {
+  if (errorMessage || questions.length === 0) {
     return (
       <main className="practice-page">
-        <div className="practice-message-card">
-          <h1>Practice unavailable</h1>
-          <p>{errorMessage}</p>
+        <div className="practice-error">
+          <div className="practice-error-icon">
+            !
+          </div>
 
-          <Link
-            href="/dashboard"
-            className="practice-button"
+          <h1>Practice unavailable</h1>
+
+          <p>
+            {errorMessage ||
+              "No questions are available for this practice session."}
+          </p>
+
+          <button
+            type="button"
+            className="practice-primary-button"
+            onClick={() =>
+              router.push("/practice/setup")
+            }
           >
-            Back to Dashboard
-          </Link>
+            Change Filters
+          </button>
         </div>
       </main>
     );
   }
 
-  const question = questions[currentIndex];
+  const currentQuestion =
+    questions[currentIndex];
 
   const progress =
-    ((currentIndex + 1) / questions.length) * 100;
+    ((currentIndex + 1) /
+      questions.length) *
+    100;
 
-  const correctAnswer =
-    normalizeAnswer(question.correct_answer);
-
-  const isCurrentCorrect =
-    selectedAnswer === correctAnswer;
+  const options = [
+    {
+      key: "A",
+      text: currentQuestion.option_a,
+    },
+    {
+      key: "B",
+      text: currentQuestion.option_b,
+    },
+    {
+      key: "C",
+      text: currentQuestion.option_c,
+    },
+    {
+      key: "D",
+      text: currentQuestion.option_d,
+    },
+  ];
 
   return (
     <main className="practice-page">
       <header className="practice-topbar">
         <div className="practice-container practice-nav">
-          <Link
-            href="/dashboard"
-            className="practice-brand"
+          <button
+            type="button"
+            className="practice-back-button"
+            onClick={() =>
+              router.push("/practice/setup")
+            }
           >
-            <div className="brand-mark">N</div>
-            <span>NEET-PG Master</span>
-          </Link>
+            ←
+          </button>
 
-          <div className="practice-session-score">
-            Score: <strong>{score}</strong>
+          <div className="practice-brand">
+            <div className="brand-mark">N</div>
+
+            <span>NEET-PG Master</span>
+          </div>
+
+          <div className="practice-counter">
+            {currentIndex + 1} /{" "}
+            {questions.length}
           </div>
         </div>
       </header>
 
       <section className="practice-container practice-main">
-        <div className="practice-header">
+        <div className="practice-progress-wrapper">
+          <div className="practice-progress-track">
+            <div
+              className="practice-progress-fill"
+              style={{
+                width: `${progress}%`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="practice-meta">
           <div>
-            <span className="practice-eyebrow">
-              PRACTICE SESSION
-            </span>
+            {currentQuestion.subject && (
+              <span>
+                {currentQuestion.subject}
+              </span>
+            )}
 
-            <h1>NEET-PG MCQs</h1>
+            {currentQuestion.unit && (
+              <span>
+                {currentQuestion.unit}
+              </span>
+            )}
+
+            {currentQuestion.difficulty && (
+              <span>
+                {currentQuestion.difficulty}
+              </span>
+            )}
+
+            {currentQuestion.is_pyq && (
+              <span>PYQ</span>
+            )}
           </div>
 
-          <div className="practice-progress-text">
-            Question {currentIndex + 1} of{" "}
-            {questions.length}
-          </div>
+          <span>
+            Score: {score}
+          </span>
         </div>
 
-        <div className="practice-progress-bar">
-          <div
-            className="practice-progress-fill"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <article className="question-card">
-          <div className="question-meta">
-            {question.subject && (
-              <span>{question.subject}</span>
-            )}
-
-            {question.unit && (
-              <span>{question.unit}</span>
-            )}
-
-            {question.difficulty && (
-              <span>{question.difficulty}</span>
-            )}
-
-            {question.year && (
-              <span>PYQ {question.year}</span>
-            )}
-          </div>
-
-          <div className="question-number">
+        <article className="practice-card">
+          <div className="practice-question-number">
             Question {currentIndex + 1}
           </div>
 
-          <h2 className="question-text">
-            {question.question}
-          </h2>
+          <h1 className="practice-question">
+            {currentQuestion.question}
+          </h1>
 
-          {question.image_url && (
-            <div className="question-image-wrapper">
+          {currentQuestion.image_url && (
+            <div className="practice-image-wrapper">
               <img
-                src={question.image_url}
-                alt="Question illustration"
-                className="question-image"
+                src={currentQuestion.image_url}
+                alt={
+                  currentQuestion.question
+                }
+                className="practice-question-image"
               />
             </div>
           )}
 
-          <div className="options-list">
-            {OPTION_KEYS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={getOptionClass(option)}
-                onClick={() =>
-                  selectAnswer(option)
-                }
-                disabled={answered || saving}
-              >
-                <span className="option-letter">
-                  {option}
-                </span>
+          <div className="practice-options">
+            {options.map((option) => {
+              const isSelected =
+                selectedAnswer ===
+                option.key;
 
-                <span className="option-text">
-                  {getOptionText(question, option)}
-                </span>
-              </button>
-            ))}
+              const isCorrect =
+                option.key ===
+                currentQuestion.correct_answer;
+
+              let className =
+                "practice-option";
+
+              if (selectedAnswer) {
+                if (isCorrect) {
+                  className +=
+                    " practice-option-correct";
+                } else if (isSelected) {
+                  className +=
+                    " practice-option-wrong";
+                }
+              }
+
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={className}
+                  onClick={() =>
+                    selectAnswer(
+                      option.key
+                    )
+                  }
+                  disabled={
+                    !!selectedAnswer ||
+                    saving
+                  }
+                >
+                  <span className="practice-option-key">
+                    {option.key}
+                  </span>
+
+                  <span className="practice-option-text">
+                    {option.text}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {answered && (
-            <div
-              className={
-                isCurrentCorrect
-                  ? "answer-feedback answer-feedback-correct"
-                  : "answer-feedback answer-feedback-wrong"
-              }
-            >
-              <div className="answer-feedback-title">
-                {isCurrentCorrect
-                  ? "✓ Correct"
-                  : `✕ Incorrect — Correct answer: ${correctAnswer}`}
+          {showExplanation && (
+            <div className="practice-explanation">
+              <div className="practice-explanation-title">
+                Explanation
               </div>
 
-              {question.explanation && (
-                <div className="answer-explanation">
-                  <strong>Explanation</strong>
-
-                  <p>
-                    {question.explanation}
-                  </p>
-                </div>
-              )}
+              <p>
+                {currentQuestion.explanation ||
+                  "No explanation is available for this question."}
+              </p>
             </div>
           )}
 
-          {errorMessage && (
-            <div className="practice-inline-error">
-              {errorMessage}
-            </div>
-          )}
-
-          {answered && (
-            <div className="question-footer">
-              <span>
-                {answeredCount} of{" "}
-                {questions.length} answered
-              </span>
-
-              <button
-                type="button"
-                className="practice-next-button"
-                onClick={goToNextQuestion}
-              >
-                {currentIndex ===
-                questions.length - 1
-                  ? "Finish Session"
+          {showExplanation && (
+            <button
+              type="button"
+              className="practice-next-button"
+              onClick={goToNextQuestion}
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : currentIndex ===
+                    questions.length - 1
+                  ? "View Result"
                   : "Next Question →"}
-              </button>
-            </div>
+            </button>
           )}
         </article>
       </section>
     </main>
+  );
+}
+
+function PracticeLoading() {
+  return (
+    <main className="practice-page">
+      <div className="practice-loading">
+        <div className="loading-mark">N</div>
+
+        <p>Loading practice...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function PracticePage() {
+  return (
+    <Suspense fallback={<PracticeLoading />}>
+      <PracticeContent />
+    </Suspense>
   );
 }
