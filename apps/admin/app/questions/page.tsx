@@ -37,12 +37,13 @@ type EditForm = {
 
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("All");
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -69,44 +70,31 @@ export default function QuestionBankPage() {
     setLoading(false);
   }
 
-  useEffect(() => {
-  loadQuestions();
-  loadSubjects();
-}, []);
+  async function loadSubjects() {
+    const { data, error: fetchError } = await supabase
+      .from("subjects")
+      .select("name")
+      .order("name", { ascending: true });
 
-async function loadSubjects() {
-  const { data, error: fetchError } = await supabase
-    .from("subjects")
-    .select("name")
-    .order("name", { ascending: true });
+    if (fetchError) {
+      setError(fetchError.message);
+      return;
+    }
 
-  if (fetchError) {
-    setError(fetchError.message);
-    return;
+    setAvailableSubjects(
+      (data || []).map((item) => item.name)
+    );
   }
 
-  setAvailableSubjects(
-    (data || []).map((item) => item.name)
-  );
-}
+  useEffect(() => {
+    loadQuestions();
+    loadSubjects();
+  }, []);
 
   const subjects = useMemo(() => {
-  const uniqueSubjects = new Set<string>(
-    availableSubjects
-  );
-
-  questions.forEach((item) => {
-    if (item.subject) {
-      uniqueSubjects.add(item.subject);
-    }
-  });
-
-  return [
-    "All",
-    ...Array.from(uniqueSubjects).sort(),
-  ];
-}, [questions, availableSubjects]);
-    const uniqueSubjects = new Set<string>();
+    const uniqueSubjects = new Set<string>(
+      availableSubjects
+    );
 
     questions.forEach((item) => {
       if (item.subject) {
@@ -114,8 +102,11 @@ async function loadSubjects() {
       }
     });
 
-    return ["All", ...Array.from(uniqueSubjects).sort()];
-  }, [questions]);
+    return [
+      "All",
+      ...Array.from(uniqueSubjects).sort(),
+    ];
+  }, [questions, availableSubjects]);
 
   const filteredQuestions = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
@@ -193,7 +184,9 @@ async function loadSubjects() {
       !editForm.option_c.trim() ||
       !editForm.option_d.trim()
     ) {
-      alert("Question and all four options are required.");
+      alert(
+        "Question and all four options are required."
+      );
       return;
     }
 
@@ -208,19 +201,27 @@ async function loadSubjects() {
         option_c: editForm.option_c.trim(),
         option_d: editForm.option_d.trim(),
         correct_answer: editForm.correct_answer,
-        explanation: editForm.explanation.trim() || null,
-        subject: editForm.subject.trim() || null,
-        unit: editForm.unit.trim() || null,
-        subunit: editForm.subunit.trim() || null,
-        topic: editForm.topic.trim() || null,
-        image_url: editForm.image_url.trim() || null,
+        explanation:
+          editForm.explanation.trim() || null,
+        subject:
+          editForm.subject.trim() || null,
+        unit:
+          editForm.unit.trim() || null,
+        subunit:
+          editForm.subunit.trim() || null,
+        topic:
+          editForm.topic.trim() || null,
+        image_url:
+          editForm.image_url.trim() || null,
       })
       .eq("id", editingId);
 
     setSaving(false);
 
     if (updateError) {
-      alert(`Update failed: ${updateError.message}`);
+      alert(
+        `Update failed: ${updateError.message}`
+      );
       return;
     }
 
@@ -247,7 +248,9 @@ async function loadSubjects() {
     setDeletingId(null);
 
     if (deleteError) {
-      alert(`Delete failed: ${deleteError.message}`);
+      alert(
+        `Delete failed: ${deleteError.message}`
+      );
       return;
     }
 
@@ -287,12 +290,16 @@ async function loadSubjects() {
             </h1>
 
             <p style={styles.subtitle}>
-              Manage, edit and review your NEET-PG questions.
+              Manage, edit and review your NEET-PG
+              questions.
             </p>
           </div>
 
           <div style={styles.headerActions}>
-            <a href="/" style={styles.secondaryButton}>
+            <a
+              href="/"
+              style={styles.secondaryButton}
+            >
               Dashboard
             </a>
 
@@ -314,7 +321,8 @@ async function loadSubjects() {
                 </h2>
 
                 <p style={styles.editSubtitle}>
-                  Modify the question and save your changes.
+                  Modify the question and save your
+                  changes.
                 </p>
               </div>
 
@@ -352,24 +360,16 @@ async function loadSubjects() {
                   Option A *
                 </label>
 
-                <select
-  value={editForm.subject}
-  onChange={(e) =>
-    updateEditField(
-      "subject",
-      e.target.value
-    )
-  }
-  style={styles.input}
->
-  <option value="">Select subject</option>
-
-  {availableSubjects.map((subject) => (
-    <option key={subject} value={subject}>
-      {subject}
-    </option>
-  ))}
-</select>
+                <input
+                  value={editForm.option_a}
+                  onChange={(e) =>
+                    updateEditField(
+                      "option_a",
+                      e.target.value
+                    )
+                  }
+                  style={styles.input}
+                />
               </div>
 
               <div style={styles.field}>
@@ -450,7 +450,7 @@ async function loadSubjects() {
                   Subject
                 </label>
 
-                <input
+                <select
                   value={editForm.subject}
                   onChange={(e) =>
                     updateEditField(
@@ -459,7 +459,22 @@ async function loadSubjects() {
                     )
                   }
                   style={styles.input}
-                />
+                >
+                  <option value="">
+                    Select subject
+                  </option>
+
+                  {availableSubjects.map(
+                    (subject) => (
+                      <option
+                        key={subject}
+                        value={subject}
+                      >
+                        {subject}
+                      </option>
+                    )
+                  )}
+                </select>
               </div>
 
               <div style={styles.field}>
@@ -556,7 +571,9 @@ async function loadSubjects() {
               disabled={saving}
               style={styles.saveButton}
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {saving
+                ? "Saving..."
+                : "Save Changes"}
             </button>
           </section>
         )}
@@ -589,7 +606,10 @@ async function loadSubjects() {
             </div>
 
             <div style={styles.statNumber}>
-              {Math.max(subjects.length - 1, 0)}
+              {Math.max(
+                subjects.length - 1,
+                0
+              )}
             </div>
           </div>
 
@@ -622,7 +642,9 @@ async function loadSubjects() {
               <select
                 value={subjectFilter}
                 onChange={(e) =>
-                  setSubjectFilter(e.target.value)
+                  setSubjectFilter(
+                    e.target.value
+                  )
                 }
                 style={styles.input}
               >
@@ -669,7 +691,8 @@ async function loadSubjects() {
           !error &&
           filteredQuestions.length === 0 && (
             <section style={styles.messageCard}>
-              No questions match your current search/filter.
+              No questions match your current
+              search/filter.
             </section>
           )}
 
@@ -686,11 +709,16 @@ async function loadSubjects() {
                   >
 
                     <div style={styles.questionTop}>
-                      <span style={styles.questionNumber}>
+                      <span
+                        style={
+                          styles.questionNumber
+                        }
+                      >
                         Q{index + 1}
                       </span>
 
                       <div style={styles.tags}>
+
                         {item.subject && (
                           <span style={styles.tag}>
                             {item.subject}
@@ -708,6 +736,7 @@ async function loadSubjects() {
                             {item.topic}
                           </span>
                         )}
+
                       </div>
                     </div>
 
@@ -720,7 +749,8 @@ async function loadSubjects() {
                       <div
                         style={{
                           ...styles.option,
-                          ...(item.correct_answer === "A"
+                          ...(item.correct_answer ===
+                          "A"
                             ? styles.correctOption
                             : {}),
                         }}
@@ -732,7 +762,8 @@ async function loadSubjects() {
                       <div
                         style={{
                           ...styles.option,
-                          ...(item.correct_answer === "B"
+                          ...(item.correct_answer ===
+                          "B"
                             ? styles.correctOption
                             : {}),
                         }}
@@ -744,7 +775,8 @@ async function loadSubjects() {
                       <div
                         style={{
                           ...styles.option,
-                          ...(item.correct_answer === "C"
+                          ...(item.correct_answer ===
+                          "C"
                             ? styles.correctOption
                             : {}),
                         }}
@@ -756,7 +788,8 @@ async function loadSubjects() {
                       <div
                         style={{
                           ...styles.option,
-                          ...(item.correct_answer === "D"
+                          ...(item.correct_answer ===
+                          "D"
                             ? styles.correctOption
                             : {}),
                         }}
@@ -775,21 +808,31 @@ async function loadSubjects() {
                     </div>
 
                     {item.explanation && (
-                      <details style={styles.explanation}>
-                        <summary style={styles.summary}>
+                      <details
+                        style={styles.explanation}
+                      >
+                        <summary
+                          style={styles.summary}
+                        >
                           View Explanation
                         </summary>
 
-                        <p style={styles.explanationText}>
+                        <p
+                          style={
+                            styles.explanationText
+                          }
+                        >
                           {item.explanation}
                         </p>
                       </details>
                     )}
 
                     <div style={styles.metadata}>
+
                       {item.subunit && (
                         <span>
-                          Subunit: {item.subunit}
+                          Subunit:{" "}
+                          {item.subunit}
                         </span>
                       )}
 
@@ -798,9 +841,14 @@ async function loadSubjects() {
                           Topic: {item.topic}
                         </span>
                       )}
+
                     </div>
 
-                    <div style={styles.managementBar}>
+                    <div
+                      style={
+                        styles.managementBar
+                      }
+                    >
 
                       <button
                         onClick={() =>
@@ -813,14 +861,20 @@ async function loadSubjects() {
 
                       <button
                         onClick={() =>
-                          deleteQuestion(item.id)
+                          deleteQuestion(
+                            item.id
+                          )
                         }
                         disabled={
-                          deletingId === item.id
+                          deletingId ===
+                          item.id
                         }
-                        style={styles.deleteButton}
+                        style={
+                          styles.deleteButton
+                        }
                       >
-                        {deletingId === item.id
+                        {deletingId ===
+                        item.id
                           ? "Deleting..."
                           : "🗑️ Delete"}
                       </button>
@@ -839,7 +893,10 @@ async function loadSubjects() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     background: "#f5f7fb",
@@ -1009,6 +1066,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     color: "#172033",
     fontSize: "14px",
+    boxSizing: "border-box",
   },
 
   textarea: {
@@ -1022,6 +1080,7 @@ const styles: Record<string, React.CSSProperties> = {
     resize: "vertical",
     fontFamily: "inherit",
     lineHeight: 1.5,
+    boxSizing: "border-box",
   },
 
   saveButton: {
