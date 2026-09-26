@@ -42,6 +42,7 @@ export default function QuestionBankPage() {
 
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("All");
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -69,10 +70,42 @@ export default function QuestionBankPage() {
   }
 
   useEffect(() => {
-    loadQuestions();
-  }, []);
+  loadQuestions();
+  loadSubjects();
+}, []);
+
+async function loadSubjects() {
+  const { data, error: fetchError } = await supabase
+    .from("subjects")
+    .select("name")
+    .order("name", { ascending: true });
+
+  if (fetchError) {
+    setError(fetchError.message);
+    return;
+  }
+
+  setAvailableSubjects(
+    (data || []).map((item) => item.name)
+  );
+}
 
   const subjects = useMemo(() => {
+  const uniqueSubjects = new Set<string>(
+    availableSubjects
+  );
+
+  questions.forEach((item) => {
+    if (item.subject) {
+      uniqueSubjects.add(item.subject);
+    }
+  });
+
+  return [
+    "All",
+    ...Array.from(uniqueSubjects).sort(),
+  ];
+}, [questions, availableSubjects]);
     const uniqueSubjects = new Set<string>();
 
     questions.forEach((item) => {
@@ -319,16 +352,24 @@ export default function QuestionBankPage() {
                   Option A *
                 </label>
 
-                <input
-                  value={editForm.option_a}
-                  onChange={(e) =>
-                    updateEditField(
-                      "option_a",
-                      e.target.value
-                    )
-                  }
-                  style={styles.input}
-                />
+                <select
+  value={editForm.subject}
+  onChange={(e) =>
+    updateEditField(
+      "subject",
+      e.target.value
+    )
+  }
+  style={styles.input}
+>
+  <option value="">Select subject</option>
+
+  {availableSubjects.map((subject) => (
+    <option key={subject} value={subject}>
+      {subject}
+    </option>
+  ))}
+</select>
               </div>
 
               <div style={styles.field}>
